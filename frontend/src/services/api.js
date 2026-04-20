@@ -1,3 +1,5 @@
+// frontend/src/services/api.js
+
 import axios from 'axios'
 import toast from 'react-hot-toast'
 
@@ -62,18 +64,33 @@ export const authService = {
     
     logout: async () => {
         const refresh_token = localStorage.getItem('refresh_token')
+        
+        // Try to blacklist the token if it exists
         if (refresh_token) {
-            await api.post('/auth/logout/', { refresh_token })
+            try {
+                await api.post('/auth/logout/', { refresh_token })
+            } catch (error) {
+                console.error('Logout error:', error)
+                // Continue with local cleanup even if server logout fails
+            }
         }
+        
+        // Clear local storage regardless of server response
         localStorage.removeItem('access_token')
         localStorage.removeItem('refresh_token')
         localStorage.removeItem('user')
+        
+        return { success: true }
     },
     
     getCurrentUser: () => {
         const userStr = localStorage.getItem('user')
         if (userStr) {
-            return JSON.parse(userStr)
+            try {
+                return JSON.parse(userStr)
+            } catch (e) {
+                return null
+            }
         }
         return null
     }

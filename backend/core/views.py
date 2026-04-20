@@ -10,6 +10,21 @@ from .serializers import (
     IDApplicationSerializer, ApplicationHistorySerializer
 )
 
+# core/viewsets.py
+
+from rest_framework import viewsets, status, permissions
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.exceptions import TokenError
+from django.contrib.auth import authenticate
+from django.utils import timezone
+from .models import KenyanUser, IDApplication, ApplicationHistory
+from .serializers import (
+    UserRegistrationSerializer, LoginSerializer, UserProfileSerializer,
+    IDApplicationSerializer, ApplicationHistorySerializer
+)
+
 class AuthViewSet(viewsets.GenericViewSet):
     permission_classes = [permissions.AllowAny]
     
@@ -45,12 +60,37 @@ class AuthViewSet(viewsets.GenericViewSet):
     def logout(self, request):
         try:
             refresh_token = request.data.get('refresh_token')
+            if not refresh_token:
+                return Response(
+                    {'error': 'Refresh token is required'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
             token = RefreshToken(refresh_token)
             token.blacklist()
-            return Response({'message': 'Logged out successfully'})
+            
+            return Response(
+                {'message': 'Successfully logged out'}, 
+                status=status.HTTP_200_OK
+            )
+        except TokenError as e:
+            return Response(
+                {'error': 'Invalid token'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except AttributeError:
+            # If blacklist app is not installed, just return success
+            return Response(
+                {'message': 'Logged out successfully'}, 
+                status=status.HTTP_200_OK
+            )
         except Exception as e:
-            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
+            return Response(
+                {'error': str(e)}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+            
 class UserViewSet(viewsets.ModelViewSet):
     serializer_class = UserProfileSerializer
     permission_classes = [permissions.IsAuthenticated]

@@ -28,6 +28,8 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',
     'corsheaders',
+    'rest_framework_simplejwt',
+    'rest_framework_simplejwt.token_blacklist',  # Add this line
     'core',
 ]
 
@@ -128,6 +130,13 @@ SIMPLE_JWT = {
     'BLACKLIST_AFTER_ROTATION': True,
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
-
+# JWT settings
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(hours=1),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
+    'ROTATE_REFRESH_TOKENS': True,  # Change to True for blacklist
+    'BLACKLIST_AFTER_ROTATION': True,  # Change to True for blacklist
+    'AUTH_HEADER_TYPES': ('Bearer',),
+}
 # Custom user model
 AUTH_USER_MODEL = 'core.KenyanUser'
