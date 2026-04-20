@@ -1,22 +1,68 @@
+// ApplicationStatus.jsx
 import React, { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { userService, applicationService } from '../services/api'
 import toast from 'react-hot-toast'
 
+const PIPELINE_STAGES = [
+    { key: 'PENDING',    label: 'Submitted',  icon: 'bi-send'           },
+    { key: 'VERIFIED',   label: 'Verified',   icon: 'bi-patch-check'    },
+    { key: 'PROCESSING', label: 'Processing', icon: 'bi-gear'           },
+    { key: 'APPROVED',   label: 'Approved',   icon: 'bi-check2-all'     },
+    { key: 'READY',      label: 'Ready',      icon: 'bi-person-vcard'   },
+    { key: 'COLLECTED',  label: 'Collected',  icon: 'bi-bag-check'      },
+]
+
+const STATUS_ORDER = PIPELINE_STAGES.map(s => s.key)
+
+const getBadgeClass = (status) => {
+    const map = {
+        PENDING:    'badge-pending',
+        VERIFIED:   'badge-verified',
+        PROCESSING: 'badge-processing',
+        APPROVED:   'badge-approved',
+        REJECTED:   'badge-rejected',
+        READY:      'badge-ready',
+        COLLECTED:  'badge-collected',
+    }
+    return map[status] || 'badge-collected'
+}
+
+const getStepState = (stageKey, currentStatus) => {
+    if (currentStatus === 'REJECTED') {
+        const currentIdx = STATUS_ORDER.indexOf('PROCESSING')
+        const stageIdx   = STATUS_ORDER.indexOf(stageKey)
+        if (stageIdx < currentIdx) return 'done'
+        if (stageKey === 'PROCESSING') return 'rejected'
+        return ''
+    }
+    const currentIdx = STATUS_ORDER.indexOf(currentStatus)
+    const stageIdx   = STATUS_ORDER.indexOf(stageKey)
+    if (stageIdx < currentIdx)  return 'done'
+    if (stageIdx === currentIdx) return 'active'
+    return ''
+}
+
+const getHistoryItemClass = (status) => {
+    if (status === 'REJECTED') return 'rejected'
+    if (status === 'PENDING')  return 'pending'
+    return ''
+}
+
 const ApplicationStatus = () => {
-    const [status, setStatus] = useState(null)
+    const navigate = useNavigate()
+    const [status,      setStatus]      = useState(null)
     const [application, setApplication] = useState(null)
-    const [history, setHistory] = useState([])
-    const [loading, setLoading] = useState(true)
-    
-    useEffect(() => {
-        fetchStatus()
-    }, [])
-    
+    const [history,     setHistory]     = useState([])
+    const [loading,     setLoading]     = useState(true)
+
+    useEffect(() => { fetchStatus() }, [])
+
     const fetchStatus = async () => {
         try {
             const statusData = await userService.getApplicationStatus()
             setStatus(statusData)
-            
+
             if (statusData.has_applied) {
                 const apps = await applicationService.getMyApplication()
                 if (apps && apps.length > 0) {
@@ -25,163 +71,286 @@ const ApplicationStatus = () => {
                     setHistory(historyData)
                 }
             }
-        } catch (error) {
+        } catch {
             toast.error('Failed to load application status')
         } finally {
             setLoading(false)
         }
     }
-    
-    const getStatusIcon = (status) => {
-        const icons = {
-            'PENDING': 'fa-clock',
-            'VERIFIED': 'fa-check-circle',
-            'PROCESSING': 'fa-cogs',
-            'APPROVED': 'fa-check-double',
-            'REJECTED': 'fa-times-circle',
-            'READY': 'fa-id-card',
-            'COLLECTED': 'fa-hand-peace'
-        }
-        return icons[status] || 'fa-question-circle'
-    }
-    
-    const getStatusColor = (status) => {
-        const colors = {
-            'PENDING': 'warning',
-            'VERIFIED': 'info',
-            'PROCESSING': 'primary',
-            'APPROVED': 'success',
-            'REJECTED': 'danger',
-            'READY': 'success',
-            'COLLECTED': 'secondary'
-        }
-        return colors[status] || 'secondary'
-    }
-    
+
+    /* ── Loading ── */
     if (loading) {
         return (
-            <div className="text-center mt-5">
-                <div className="spinner-border text-primary" role="status">
-                    <span className="visually-hidden">Loading...</span>
+            <div className="page-wrapper">
+                <div className="page-loader">
+                    <div className="loader-ring"></div>
+                    <p>Loading application status…</p>
                 </div>
             </div>
         )
     }
-    
+
+    /* ── No application ── */
     if (!status?.has_applied) {
         return (
-            <div className="container py-4">
-                <div className="alert alert-info">
-                    <h5><i className="fas fa-info-circle"></i> No Application Found</h5>
-                    <p>You haven't submitted an ID application yet.</p>
-                    <button 
-                        className="btn btn-primary"
-                        onClick={() => window.location.href = '/apply-id'}
+            <div className="page-wrapper animate-fade-in">
+                <div className="page-header">
+                    <div className="page-eyebrow">
+                        <i className="bi bi-bar-chart-line"></i>
+                        Application Status
+                    </div>
+                    <h2>No Application Found</h2>
+                </div>
+
+                <div className="empty-state gov-card">
+                    <div className="empty-icon">
+                        <i className="bi bi-file-earmark-x"></i>
+                    </div>
+                    <h5>You haven't submitted an application yet</h5>
+                    <p>
+                        Start your National ID application to track its progress here.
+                    </p>
+                    <button
+                        className="btn-gov btn-gov-primary"
+                        onClick={() => navigate('/apply-id')}
                     >
+                        <i className="bi bi-file-earmark-plus"></i>
                         Apply for ID Now
                     </button>
                 </div>
             </div>
         )
     }
-    
+
+    const currentStatus = status.status
+    const appliedDate   = status.application_date
+        ? new Date(status.application_date).toLocaleDateString('en-KE', {
+              day: 'numeric', month: 'long', year: 'numeric'
+          })
+        : '—'
+
     return (
-        <div className="container py-4">
-            <div className="form-container">
-                <h3 className="form-title">
-                    <i className="fas fa-chart-line me-2"></i>
-                    Application Status
-                </h3>
-                
-                <div className="row mb-4">
-                    <div className="col-md-6">
-                        <div className="stat-card text-center">
-                            <div className="stat-icon">
-                                <i className={`fas ${getStatusIcon(status.status)} fa-3x text-${getStatusColor(status.status)}`}></i>
-                            </div>
-                            <div className="stat-title">Current Status</div>
-                            <div className="stat-value">
-                                <span className={`badge bg-${getStatusColor(status.status)} fs-6`}>
-                                    {status.status}
-                                </span>
-                            </div>
+        <div className="page-wrapper animate-fade-in">
+
+            {/* ── Page header ── */}
+            <div className="page-header">
+                <div className="gov-breadcrumb">
+                    <a href="/dashboard">Dashboard</a>
+                    <span className="breadcrumb-sep"><i className="bi bi-chevron-right"></i></span>
+                    <span>Application Status</span>
+                </div>
+                <div className="page-eyebrow">
+                    <i className="bi bi-bar-chart-line"></i>
+                    Tracking
+                </div>
+                <h2>Application Status</h2>
+                <p className="page-subtitle">
+                    Real-time progress of your National ID application.
+                </p>
+            </div>
+
+            {/* ── Status summary cards ── */}
+            <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
+                <div className="stat-card animate-fade-in delay-1">
+                    <div className="stat-top">
+                        <div className="stat-icon-wrap">
+                            <i className="bi bi-person-vcard"></i>
                         </div>
                     </div>
-                    
-                    <div className="col-md-6">
-                        <div className="stat-card text-center">
-                            <div className="stat-icon">
-                                <i className="fas fa-calendar-alt fa-3x text-primary"></i>
+                    <div className="stat-value" style={{ fontSize: '1.25rem' }}>
+                        <span className={`gov-badge ${getBadgeClass(currentStatus)}`}>
+                            <i className="bi bi-circle-fill" style={{ fontSize: '0.45rem' }}></i>
+                            {currentStatus}
+                        </span>
+                    </div>
+                    <div className="stat-title">Current Status</div>
+                </div>
+
+                <div className="stat-card accent-gold animate-fade-in delay-2">
+                    <div className="stat-top">
+                        <div className="stat-icon-wrap" style={{ background: 'var(--gov-gold-light)' }}>
+                            <i className="bi bi-calendar3" style={{ color: 'var(--gov-gold)' }}></i>
+                        </div>
+                    </div>
+                    <div className="stat-value" style={{ fontSize: '1.0625rem', fontFamily: 'var(--font-body)' }}>
+                        {appliedDate}
+                    </div>
+                    <div className="stat-title">Date Submitted</div>
+                </div>
+
+                <div className="stat-card animate-fade-in delay-3">
+                    <div className="stat-top">
+                        <div className="stat-icon-wrap">
+                            <i className="bi bi-patch-check"></i>
+                        </div>
+                    </div>
+                    <div className="stat-value" style={{ fontSize: '1.1875rem' }}>
+                        {status.is_verified
+                            ? <span style={{ color: 'var(--success)', fontSize: '1rem' }}><i className="bi bi-check-circle-fill me-1"></i>Verified</span>
+                            : <span style={{ color: 'var(--warning)', fontSize: '1rem' }}><i className="bi bi-hourglass-split me-1"></i>Pending</span>
+                        }
+                    </div>
+                    <div className="stat-title">Verification</div>
+                </div>
+            </div>
+
+            {/* ── Pipeline progress ── */}
+            <div className="gov-card animate-fade-in delay-2">
+                <div className="gov-card-header">
+                    <div className="gov-card-title">
+                        <i className="bi bi-arrow-right-circle"></i>
+                        Application Progress
+                    </div>
+                </div>
+                <div className="gov-card-body">
+                    {currentStatus === 'REJECTED' && (
+                        <div className="gov-alert alert-danger mb-3" style={{ marginBottom: '1.25rem' }}>
+                            <i className="bi bi-x-circle-fill alert-icon"></i>
+                            <div className="alert-body">
+                                <div className="alert-title">Application Rejected</div>
+                                {status.rejection_reason && <p style={{ marginBottom: 0 }}>{status.rejection_reason}</p>}
                             </div>
-                            <div className="stat-title">Application Date</div>
-                            <div className="stat-value fs-5">
-                                {new Date(status.application_date).toLocaleDateString()}
-                            </div>
+                        </div>
+                    )}
+                    <div className="status-pipeline">
+                        {PIPELINE_STAGES.map((stage) => {
+                            const state = getStepState(stage.key, currentStatus)
+                            return (
+                                <div key={stage.key} className={`status-step ${state}`}>
+                                    <div className="step-circle">
+                                        {state === 'done'
+                                            ? <i className="bi bi-check-lg"></i>
+                                            : state === 'rejected'
+                                            ? <i className="bi bi-x-lg"></i>
+                                            : <i className={`bi ${stage.icon}`}></i>
+                                        }
+                                    </div>
+                                    <div className="step-label">{stage.label}</div>
+                                </div>
+                            )
+                        })}
+                    </div>
+                </div>
+            </div>
+
+            {/* ── Application details ── */}
+            {application && (
+                <div className="gov-card animate-fade-in delay-3">
+                    <div className="gov-card-header">
+                        <div className="gov-card-title">
+                            <i className="bi bi-file-earmark-text"></i>
+                            Application Details
+                        </div>
+                        {application.application_number && (
+                            <span style={{
+                                fontSize: '0.75rem',
+                                color: 'var(--grey-500)',
+                                fontFamily: 'monospace',
+                                background: 'var(--grey-50)',
+                                border: '1px solid var(--grey-200)',
+                                borderRadius: 'var(--radius-sm)',
+                                padding: '0.2rem 0.6rem',
+                            }}>
+                                #{application.application_number}
+                            </span>
+                        )}
+                    </div>
+                    <div className="gov-card-body" style={{ padding: 0 }}>
+                        <div className="gov-table-wrap" style={{ border: 'none', borderRadius: 0 }}>
+                            <table className="gov-table">
+                                <tbody>
+                                    <tr>
+                                        <td className="col-label">Application Number</td>
+                                        <td style={{ fontFamily: 'monospace', fontWeight: 600 }}>
+                                            {application.application_number}
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td className="col-label">Parent / Guardian Name</td>
+                                        <td>{application.parents_name || '—'}</td>
+                                    </tr>
+                                    <tr>
+                                        <td className="col-label">Marital Status</td>
+                                        <td style={{ textTransform: 'capitalize' }}>
+                                            {application.marital_status?.toLowerCase() || '—'}
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td className="col-label">Occupation</td>
+                                        <td>{application.occupation || 'Not specified'}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 </div>
-                
-                {application && (
-                    <div className="mt-4">
-                        <h5>Application Details</h5>
-                        <table className="table table-bordered">
-                            <tbody>
-                                <tr>
-                                    <th width="30%">Application Number</th>
-                                    <td>{application.application_number}</td>
-                                </tr>
-                                <tr>
-                                    <th>Parent's/Guardian's Name</th>
-                                    <td>{application.parents_name}</td>
-                                </tr>
-                                <tr>
-                                    <th>Marital Status</th>
-                                    <td>{application.marital_status}</td>
-                                </tr>
-                                <tr>
-                                    <th>Occupation</th>
-                                    <td>{application.occupation || 'Not specified'}</td>
-                                </tr>
-                            </tbody>
-                        </table>
+            )}
+
+            {/* ── Application history timeline ── */}
+            {history.length > 0 && (
+                <div className="gov-card animate-fade-in">
+                    <div className="gov-card-header">
+                        <div className="gov-card-title">
+                            <i className="bi bi-clock-history"></i>
+                            Activity History
+                        </div>
+                        <span style={{ fontSize: '0.8rem', color: 'var(--grey-400)' }}>
+                            {history.length} event{history.length !== 1 ? 's' : ''}
+                        </span>
                     </div>
-                )}
-                
-                {history.length > 0 && (
-                    <div className="mt-4">
-                        <h5>Application History</h5>
-                        <div className="timeline">
+                    <div className="gov-card-body">
+                        <div className="history-timeline">
                             {history.map((item, index) => (
-                                <div key={index} className="card mb-2">
-                                    <div className="card-body">
-                                        <div className="d-flex justify-content-between">
-                                            <strong className={`text-${getStatusColor(item.status)}`}>
+                                <div
+                                    key={index}
+                                    className={`history-item ${getHistoryItemClass(item.status)}`}
+                                >
+                                    <div className="history-dot"></div>
+                                    <div className="history-header">
+                                        <span className="history-status">
+                                            <span className={`gov-badge ${getBadgeClass(item.status)}`}
+                                                style={{ fontSize: '0.65rem' }}>
                                                 {item.status}
-                                            </strong>
-                                            <small className="text-muted">
-                                                {new Date(item.changed_at).toLocaleString()}
-                                            </small>
-                                        </div>
-                                        {item.comment && (
-                                            <p className="mb-0 mt-2">{item.comment}</p>
-                                        )}
-                                        {item.changed_by_name && (
-                                            <small className="text-muted">By: {item.changed_by_name}</small>
-                                        )}
+                                            </span>
+                                        </span>
+                                        <span className="history-time">
+                                            <i className="bi bi-clock me-1"></i>
+                                            {new Date(item.changed_at).toLocaleString('en-KE', {
+                                                day: 'numeric', month: 'short', year: 'numeric',
+                                                hour: '2-digit', minute: '2-digit'
+                                            })}
+                                        </span>
                                     </div>
+                                    {item.comment && (
+                                        <div className="history-comment">{item.comment}</div>
+                                    )}
+                                    {item.changed_by_name && (
+                                        <div className="history-by">
+                                            <i className="bi bi-person me-1"></i>
+                                            {item.changed_by_name}
+                                        </div>
+                                    )}
                                 </div>
                             ))}
                         </div>
                     </div>
-                )}
-                
-                {status.status === 'REJECTED' && status.rejection_reason && (
-                    <div className="alert alert-danger mt-4">
-                        <h5><i className="fas fa-exclamation-triangle"></i> Rejection Reason</h5>
-                        <p>{status.rejection_reason}</p>
+                </div>
+            )}
+
+            {/* ── Ready for collection banner ── */}
+            {currentStatus === 'READY' && (
+                <div className="gov-alert alert-success animate-fade-in">
+                    <i className="bi bi-bag-check-fill alert-icon"></i>
+                    <div className="alert-body">
+                        <div className="alert-title">ID Card Ready for Collection!</div>
+                        <p style={{ marginBottom: 0 }}>
+                            Your National ID card is ready. Visit the registration centre where you
+                            applied, bringing your acknowledgement slip and a copy of your birth certificate.
+                        </p>
                     </div>
-                )}
-            </div>
+                </div>
+            )}
+
         </div>
     )
 }
